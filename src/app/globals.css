@@ -1,0 +1,227 @@
+@import "tailwindcss";
+
+/* ============================================================
+   JanVaani — "The People's Ledger" design system
+   Warm cream paper · deep forest-ink · marigold civic accent.
+   Fonts are wired via next/font (see layout.tsx) as CSS vars.
+   ============================================================ */
+
+@theme {
+  /* Core palette */
+  --color-paper: #f6f1e7;
+  --color-paper-deep: #efe7d6;
+  --color-ink: #16221d;
+  --color-ink-soft: #3c4a43;
+  --color-marigold: #e39a1c;
+  --color-marigold-deep: #c67d0a;
+  --color-terracotta: #b64a34;
+  --color-sage: #4f6f60;
+  --color-indigo: #263a63;
+  --color-line: #d8cdb8;
+
+  /* Type */
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-body: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-hindi: var(--font-noto-devanagari), var(--font-hanken), sans-serif;
+
+  /* Radii */
+  --radius-sm: 0.5rem;
+  --radius: 0.9rem;
+  --radius-lg: 1.4rem;
+}
+
+/* ---------- Base ---------- */
+:root {
+  color-scheme: light;
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-feature-settings: "ss01", "cv01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100dvh;
+  /* Subtle paper grain + warm radial light — atmosphere, not noise. */
+  background-image:
+    radial-gradient(120% 90% at 12% -10%, rgba(227, 154, 28, 0.1), transparent 55%),
+    radial-gradient(120% 90% at 100% 0%, rgba(38, 58, 99, 0.06), transparent 45%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  background-attachment: fixed;
+}
+
+:lang(hi) {
+  font-family: var(--font-hindi);
+}
+
+/* ---------- Typographic rhythm ---------- */
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.015em;
+}
+
+.display-xl {
+  font-family: var(--font-display);
+  font-weight: 560;
+  font-size: clamp(2.6rem, 6.5vw, 5.2rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+.display-lg {
+  font-family: var(--font-display);
+  font-weight: 540;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+}
+
+.eyebrow {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* ---------- Components ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  font-weight: 650;
+  border-radius: 999px;
+  padding: 0.95rem 1.6rem;
+  line-height: 1;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  min-height: 3rem; /* accessible tap target */
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn-primary {
+  background-color: var(--color-ink);
+  color: var(--color-paper);
+  box-shadow: 0 10px 26px -12px rgba(22, 34, 29, 0.7);
+}
+.btn-primary:hover {
+  background-color: #0d1611;
+}
+.btn-marigold {
+  background-color: var(--color-marigold);
+  color: #201401;
+  box-shadow: 0 12px 28px -12px rgba(198, 125, 10, 0.75);
+}
+.btn-marigold:hover {
+  background-color: var(--color-marigold-deep);
+}
+.btn-ghost {
+  background-color: transparent;
+  color: var(--color-ink);
+  border: 1.5px solid var(--color-ink);
+}
+.btn-ghost:hover {
+  background-color: rgba(22, 34, 29, 0.06);
+}
+
+.card {
+  background-color: rgba(255, 253, 248, 0.72);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(6px);
+}
+
+.field {
+  width: 100%;
+  background-color: #fffdf8;
+  border: 1.5px solid var(--color-line);
+  border-radius: var(--radius);
+  padding: 0.95rem 1.05rem;
+  font-size: 1.02rem;
+  color: var(--color-ink);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-height: 3.1rem;
+}
+.field:focus {
+  outline: none;
+  border-color: var(--color-marigold-deep);
+  box-shadow: 0 0 0 4px rgba(227, 154, 28, 0.22);
+}
+.field::placeholder {
+  color: #9a9384;
+}
+
+.label {
+  display: block;
+  font-weight: 650;
+  font-size: 0.95rem;
+  margin-bottom: 0.45rem;
+}
+
+/* Decorative rule that echoes an old ledger line */
+.rule-ledger {
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-line) 0 10px,
+    transparent 10px 18px
+  );
+}
+
+/* ---------- Motion ---------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: rise 0.7s cubic-bezier(0.2, 0.65, 0.25, 1) both;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(182, 74, 52, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 22px rgba(182, 74, 52, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(182, 74, 52, 0);
+  }
+}
+.recording {
+  animation: pulse-ring 1.5s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Focus visibility for keyboard users (accessibility) */
+:focus-visible {
+  outline: 3px solid var(--color-indigo);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

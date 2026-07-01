@@ -1,0 +1,73 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { Logo } from "./Logo";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+import { useI18n } from "@/lib/i18n";
+
+export function Header() {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+
+  const links = [
+    { href: "/#how", label: t.nav.how },
+    { href: "/#for-mp", label: t.nav.impact },
+  ];
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-[var(--color-line)] bg-[rgba(246,241,231,0.82)] backdrop-blur-md">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5">
+        <Link href="/" aria-label="JanVaani home">
+          <Logo />
+        </Link>
+
+        <nav className="hidden items-center gap-7 md:flex">
+          {links.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              className="text-[0.95rem] font-medium text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              {l.label}
+            </a>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher />
+          <Link href="/sign-in" className="hidden text-sm font-semibold text-[var(--color-ink)] hover:underline sm:inline-block px-2">
+            {t.nav.signIn}
+          </Link>
+          <Link href="/submit" className="btn btn-marigold !py-2.5 !px-4 text-sm">
+            {t.nav.submit}
+          </Link>
+          <button
+            className="btn btn-ghost !p-2.5 !min-h-0 md:hidden"
+            aria-label="Menu"
+            onClick={() => setOpen((o) => !o)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <nav className="border-t border-[var(--color-line)] px-5 py-3 md:hidden">
+          {[...links, { href: "/sign-in", label: t.nav.signIn }].map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              onClick={() => setOpen(false)}
+              className="block py-2.5 font-medium text-[var(--color-ink-soft)]"
+            >
+              {l.label}
+            </a>
+          ))}
+        </nav>
+      )}
+    </header>
+  );
+}
