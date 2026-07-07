@@ -19,6 +19,10 @@ class Complaint(Base):
     lng: Mapped[float | None] = mapped_column(Float, nullable=True)
     anonymous: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="new")
+    # A plain tracking tag the MP sets from the dashboard (see api/dashboard.py)
+    # — there is no department login/account system yet, so this is just a
+    # label from a fixed list, not a foreign key.
+    assigned_department: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # URLs of files already uploaded to Firebase Storage by the client —

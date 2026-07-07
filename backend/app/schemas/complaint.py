@@ -28,6 +28,7 @@ class ComplaintOut(BaseModel):
     lng: float | None
     anonymous: bool
     status: str
+    assigned_department: str | None
     created_at: datetime
     audio_url: str | None
     photo_url: str | None

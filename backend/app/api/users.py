@@ -1,10 +1,15 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user
+from app.models.complaint import Complaint
+from app.models.status_notification import StatusNotification
 from app.models.user import User
-from app.schemas.user import ProfileUpdate, UserOut
+from app.schemas.user import NotificationOut, ProfileUpdate, UserOut
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -35,3 +40,41 @@ def update_me(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.get("/me/notifications", response_model=list[NotificationOut])
+def get_my_notifications(
+    limit: int = 20,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Batched, pull-based delivery — see app/models/status_notification.py.
+    Capping to `limit` and marking rows delivered in this same request means
+    an MP bulk-updating many complaints never costs this citizen's client
+    more than one bounded fetch, however many changes queued up."""
+    rows = db.execute(
+        select(StatusNotification, Complaint.category)
+        .join(Complaint, Complaint.id == StatusNotification.complaint_id)
+        .where(StatusNotification.user_id == user.id, StatusNotification.delivered_at.is_(None))
+        .order_by(StatusNotification.created_at.asc())
+        .limit(limit)
+    ).all()
+
+    out = [
+        NotificationOut(
+            id=n.id,
+            complaint_id=n.complaint_id,
+            category=category,
+            old_status=n.old_status,
+            new_status=n.new_status,
+            created_at=n.created_at,
+        )
+        for n, category in rows
+    ]
+
+    now = datetime.now(timezone.utc)
+    for n, _ in rows:
+        n.delivered_at = now
+    db.commit()
+
+    return out

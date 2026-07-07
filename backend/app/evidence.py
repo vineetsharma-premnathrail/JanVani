@@ -93,34 +93,16 @@ def compute_evidence(mp: MPAllowlistEntry, db: Session) -> EvidenceResult:
     # thresholds for arbitrary uploaded metrics; a bonus only applies when
     # citizen complaints independently corroborate the same category.
     if mp.district:
-        complaint_cat_counts = {
-            (cat or "").lower(): count
-            for cat, count in db.execute(
-                select(Complaint.category, func.count(Complaint.id))
-                .where(scope, Complaint.category.is_not(None))
-                .group_by(Complaint.category)
-            ).all()
-        }
-
-        gov_categories = db.execute(
-            select(GovDataRecord.category, func.count(GovDataRecord.id))
-            .where(GovDataRecord.district == mp.district)
-            .group_by(GovDataRecord.category)
-        ).all()
+        complaint_cat_counts = _complaint_category_counts(scope, db)
+        gov_categories = _gov_categories_for_district(mp.district, db)
         if gov_categories:
             facts["uploaded_gov_data"] = {cat: n for cat, n in gov_categories}
 
         for gov_cat, record_count in gov_categories:
-            matched_complaints = next(
-                (n for cat, n in complaint_cat_counts.items() if gov_cat.lower() in cat or cat in gov_cat.lower()),
-                0,
-            )
-            if matched_complaints > 0:
-                score += 15
-                reasons.append(
-                    f"Uploaded government data ({record_count} {gov_cat} records) corroborates "
-                    f"{matched_complaints} citizen complaints in {mp.district} district"
-                )
+            bonus, reason = _gov_corroboration_bonus(gov_cat, record_count, complaint_cat_counts, mp.district)
+            if bonus:
+                score += bonus
+                reasons.append(reason)
 
     score = min(score, 100)
     if score >= 70:
@@ -131,3 +113,41 @@ def compute_evidence(mp: MPAllowlistEntry, db: Session) -> EvidenceResult:
         level = "Low"
 
     return EvidenceResult(score=score, level=level, reasons=reasons, facts=facts)
+
+
+def _complaint_category_counts(scope, db: Session) -> dict[str, int]:
+    return {
+        (cat or "").lower(): count
+        for cat, count in db.execute(
+            select(Complaint.category, func.count(Complaint.id))
+            .where(scope, Complaint.category.is_not(None))
+            .group_by(Complaint.category)
+        ).all()
+    }
+
+
+def _gov_categories_for_district(district: str, db: Session) -> list[tuple[str, int]]:
+    return db.execute(
+        select(GovDataRecord.category, func.count(GovDataRecord.id))
+        .where(GovDataRecord.district == district)
+        .group_by(GovDataRecord.category)
+    ).all()
+
+
+def _gov_corroboration_bonus(
+    gov_cat: str, record_count: int, complaint_cat_counts: dict[str, int], district: str
+) -> tuple[int, str | None]:
+    """Shared by compute_evidence (constituency-wide score) and
+    ranking.compute_ranked_issues (per-category score) — a bonus only ever
+    applies when citizen complaints independently corroborate the same
+    government-data category, never from the gov data alone."""
+    matched_complaints = next(
+        (n for cat, n in complaint_cat_counts.items() if gov_cat.lower() in cat or cat in gov_cat.lower()),
+        0,
+    )
+    if matched_complaints == 0:
+        return 0, None
+    return 15, (
+        f"Uploaded government data ({record_count} {gov_cat} records) corroborates "
+        f"{matched_complaints} citizen complaints in {district} district"
+    )

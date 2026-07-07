@@ -33,6 +33,7 @@ def _to_out(complaint: Complaint) -> ComplaintOut:
         lng=complaint.lng,
         anonymous=complaint.anonymous,
         status=complaint.status,
+        assigned_department=complaint.assigned_department,
         created_at=complaint.created_at,
         audio_url=media.signed_url(complaint.audio_url),
         photo_url=media.signed_url(complaint.photo_url),
@@ -93,19 +94,21 @@ def create_complaint(
 def list_complaints(
     limit: int = 50,
     offset: int = 0,
+    category: str | None = None,
+    status: str | None = None,
     mp: MPAllowlistEntry = Depends(get_current_mp),
     db: Session = Depends(get_db),
 ):
     # Previously had no auth at all — anyone could list every citizen's
     # complaints (including media URLs). Scoped to the requesting MP's own
-    # constituency, same fail-closed pattern as dashboard.py.
-    stmt = (
-        select(Complaint)
-        .where(Complaint.constituency == mp.constituency)
-        .order_by(Complaint.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+    # constituency, same fail-closed pattern as dashboard.py. category/status
+    # are optional drill-down filters used by the dashboard's exploration panel.
+    stmt = select(Complaint).where(Complaint.constituency == mp.constituency)
+    if category is not None:
+        stmt = stmt.where(Complaint.category == category)
+    if status is not None:
+        stmt = stmt.where(Complaint.status == status)
+    stmt = stmt.order_by(Complaint.created_at.desc()).limit(limit).offset(offset)
     return [_to_out(c) for c in db.execute(stmt).scalars().all()]
 
 

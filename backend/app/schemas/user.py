@@ -58,3 +58,14 @@ class SyncSummary(BaseModel):
 
 class AuthSyncRequest(BaseModel):
     id_token: str
+
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    complaint_id: uuid.UUID
+    category: str | None
+    old_status: str
+    new_status: str
+    created_at: datetime
