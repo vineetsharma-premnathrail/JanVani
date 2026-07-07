@@ -171,11 +171,14 @@ storage.rules                       — public read → signed-URL-only
   ```
   gcloud projects add-iam-policy-binding vipasana-499205 --member="user:itsvineetwork@gmail.com" --role="roles/aiplatform.user"
   ```
-- ❌ Nothing in this session has been `git commit`-ed
-- ❌ Production env vars (Maps key, App Check key, `ENFORCE_APP_CHECK`) not yet set in the actual Cloud Run/Hosting deploy config — only in local `.env.local`/`.env`
-- ❌ On Cloud Run (production), signing URLs requires the attached service account to have the **Service Account Token Creator** role on itself (needed because Cloud Run has no private key file, unlike local `serviceAccountKey.json`) — not yet verified/granted
+- ✅ ~~Nothing in this session has been `git commit`-ed~~ — committed 2026-07-08 in three commits (backend status workflow/notifications/ranked-issues, frontend dashboard features, roadmap doc)
+- ⏸️ **App Check — DEFERRED (2026-07-08, user decision).** `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` is empty in `.env.local`; the web app was never registered for App Check (reCAPTCHA Enterprise API not enabled on the project either). `ENFORCE_APP_CHECK` must stay **off** in production until a site key exists AND a frontend build carrying it is deployed — enabling it earlier would 401 every live submission. The Maps key exists in `.env.local` and gets baked into Hosting builds from this machine; deliberately NOT committed to `.env.production` because both GitHub remotes are public repos.
+- ⏸️ **Service Account Token Creator — verified NOT granted, grant DEFERRED (2026-07-08, user decision).** The `api` function runs as `1044819117404-compute@developer.gserviceaccount.com`; its SA-level IAM policy is empty and `roles/editor` does not include `iam.serviceAccounts.signBlob`. The `serviceAccountKey.json` fallback (`GCP_CREDENTIALS_PATH`) is excluded from function deploys by `firebase.json`, so in production `generate_signed_url()` fails and `media.signed_url()` returns `None` — media links are null in prod until the grant is made:
+  ```
+  gcloud iam service-accounts add-iam-policy-binding 1044819117404-compute@developer.gserviceaccount.com --member="serviceAccount:1044819117404-compute@developer.gserviceaccount.com" --role="roles/iam.serviceAccountTokenCreator" --project=vipasana-499205
+  ```
+- ⏸️ **Demo data cleanup — attempted 2026-07-08, blocked, DEFERRED (user decision).** This machine's public IP rotated to `49.36.136.255` but Cloud SQL only authorizes the stale `49.36.176.160/32`, so the delete script can't connect. To run it later: refresh the authorized network, then `python scripts/seed_demo_data.py --constituency "Test Constituency" --delete`. (Same blocker applies to running Alembic migrations from this machine — note the two NEW migrations committed 2026-07-08, `a1b2c3d4e5f7` + `b2c3d4e5f6a8`, are NOT yet applied to the live DB; the backend must not be redeployed before they run.)
 - ❌ FCM push notifications (discussed, not built)
-- ❌ Demo data cleanup command not yet run (`python scripts/seed_demo_data.py --constituency "Test Constituency" --delete`) — still live in the database
 
 ---
 
