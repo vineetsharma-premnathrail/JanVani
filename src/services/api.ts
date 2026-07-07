@@ -104,11 +104,14 @@ export interface RecentComplaint {
   category: string | null;
   location: string | null;
   anonymous: boolean;
+  // Older deployed backends may not send these yet — always guard, never assume present.
+  status?: string;
+  assigned_department?: string | null;
   created_at: string;
-  has_audio: boolean;
-  has_photo: boolean;
-  verification_confidence: number | null;
-  verification_status: string | null;
+  audio_url?: string | null;
+  photo_url?: string | null;
+  verification_confidence?: number | null;
+  verification_status?: string | null;
 }
 
 export interface MapPoint {
@@ -124,11 +127,116 @@ export interface DashboardSummary {
   distinct_locations: number;
   by_category: CategoryCount[];
   recent: RecentComplaint[];
-  map_points: MapPoint[];
+  // Older deployed backends may not send these yet — always guard, never assume present.
+  recent_has_more?: boolean;
+  map_points?: MapPoint[];
 }
 
-export async function getDashboardSummary(idToken: string): Promise<DashboardSummary> {
-  const res = await fetch(`${API_URL}/dashboard/summary`, {
+export async function getDashboardSummary(
+  idToken: string,
+  opts?: { recentLimit?: number; recentOffset?: number }
+): Promise<DashboardSummary> {
+  const params = new URLSearchParams();
+  if (opts?.recentLimit) params.set("recent_limit", String(opts.recentLimit));
+  if (opts?.recentOffset) params.set("recent_offset", String(opts.recentOffset));
+  const qs = params.toString();
+  const res = await fetch(`${API_URL}/dashboard/summary${qs ? `?${qs}` : ""}`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+export const COMPLAINT_STATUSES = ["new", "in_progress", "resolved", "rejected"] as const;
+export type ComplaintStatus = (typeof COMPLAINT_STATUSES)[number];
+
+export const DEPARTMENTS = ["PWD", "Health", "Education", "Water", "Sanitation", "Electricity", "Other"] as const;
+export type Department = (typeof DEPARTMENTS)[number];
+
+export async function updateComplaint(
+  idToken: string,
+  complaintId: string,
+  update: { status?: ComplaintStatus; assigned_department?: Department }
+): Promise<RecentComplaint> {
+  const res = await fetch(`${API_URL}/dashboard/complaints/${complaintId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify(update),
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+export interface RankedIssue {
+  category: string;
+  complaint_count: number;
+  population: number | null;
+  score: number;
+  level: string;
+  gov_data_summary: Record<string, number>;
+  reasons: string[];
+}
+
+export async function getRankedIssues(idToken: string): Promise<RankedIssue[]> {
+  const res = await fetch(`${API_URL}/dashboard/ranked-issues`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+export interface StatusCount {
+  status: string;
+  count: number;
+}
+
+export interface DepartmentProgress {
+  department: string;
+  by_status: StatusCount[];
+}
+
+export interface ProgressOut {
+  by_status: StatusCount[];
+  by_status_last_30_days: StatusCount[];
+  by_department: DepartmentProgress[];
+}
+
+export async function getDashboardProgress(idToken: string): Promise<ProgressOut> {
+  const res = await fetch(`${API_URL}/dashboard/progress`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+export async function listComplaints(
+  idToken: string,
+  opts?: { category?: string; status?: string; limit?: number; offset?: number }
+): Promise<RecentComplaint[]> {
+  const params = new URLSearchParams();
+  if (opts?.category) params.set("category", opts.category);
+  if (opts?.status) params.set("status", opts.status);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.offset) params.set("offset", String(opts.offset));
+  const qs = params.toString();
+  const res = await fetch(`${API_URL}/complaints${qs ? `?${qs}` : ""}`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+export interface NotificationOut {
+  id: string;
+  complaint_id: string;
+  category: string | null;
+  old_status: string;
+  new_status: string;
+  created_at: string;
+}
+
+export async function getMyNotifications(idToken: string): Promise<NotificationOut[]> {
+  const res = await fetch(`${API_URL}/users/me/notifications`, {
     headers: { Authorization: `Bearer ${idToken}` },
   });
   if (!res.ok) throw new Error(`Server responded ${res.status}`);

@@ -4,10 +4,19 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { SkeletonCard } from "@/components/Skeleton";
 import { useI18n } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
+import { auth } from "@/lib/firebase";
 import { INDIAN_STATES } from "@/lib/constants";
-import type { ProfileUpdateInput } from "@/services/api";
+import { getMyNotifications, type NotificationOut, type ProfileUpdateInput } from "@/services/api";
+
+const NOTIFICATION_STATUS_LABEL: Record<string, string> = {
+  new: "New",
+  in_progress: "In progress",
+  resolved: "Resolved",
+  rejected: "Rejected",
+};
 
 const EMPTY_FORM: ProfileUpdateInput = {
   first_name: "",
@@ -26,6 +35,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState<ProfileUpdateInput>(EMPTY_FORM);
   const [welcome, setWelcome] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationOut[]>([]);
 
   useEffect(() => {
     setWelcome(new URLSearchParams(window.location.search).get("welcome") === "1");
@@ -35,6 +45,15 @@ export default function ProfilePage() {
     if (!ready) return;
     if (!firebaseUser) window.location.href = "/sign-in";
     else if (!isOnboarded) window.location.href = "/onboarding";
+  }, [ready, firebaseUser, isOnboarded]);
+
+  useEffect(() => {
+    if (!ready || !firebaseUser || !isOnboarded) return;
+    auth!.currentUser!
+      .getIdToken()
+      .then((idToken) => getMyNotifications(idToken))
+      .then(setNotifications)
+      .catch((e) => console.error("Failed to load notifications", e));
   }, [ready, firebaseUser, isOnboarded]);
 
   useEffect(() => {
@@ -51,7 +70,18 @@ export default function ProfilePage() {
     }
   }, [profile]);
 
-  if (!ready || !firebaseUser || !profile) return null;
+  if (!ready || (ready && firebaseUser && !profile)) {
+    return (
+      <>
+        <Header />
+        <main id="main" className="mx-auto max-w-2xl px-5 py-12">
+          <SkeletonCard lines={4} />
+        </main>
+        <Footer />
+      </>
+    );
+  }
+  if (!firebaseUser || !profile) return null;
 
   function set<K extends keyof ProfileUpdateInput>(key: K, value: ProfileUpdateInput[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -83,6 +113,23 @@ export default function ProfilePage() {
               ✓
             </span>
             {t.profile.welcome}
+          </div>
+        )}
+
+        {notifications.length > 0 && (
+          <div className="mb-6 space-y-2">
+            {notifications.map((n) => (
+              <div
+                key={n.id}
+                className="flex items-center gap-3 rounded-xl border border-[var(--color-line)] bg-[rgba(216,154,43,0.1)] px-4 py-3 text-sm"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-marigold)] text-xs font-bold text-white">
+                  !
+                </span>
+                Your complaint{n.category ? ` about ${n.category}` : ""} is now{" "}
+                <strong>{NOTIFICATION_STATUS_LABEL[n.new_status] || n.new_status}</strong>.
+              </div>
+            ))}
           </div>
         )}
 

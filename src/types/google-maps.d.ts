@@ -4,21 +4,38 @@
 declare namespace google.maps {
   class Map {
     constructor(el: HTMLElement, opts: { center: { lat: number; lng: number }; zoom: number });
+    addListener(event: string, handler: () => void): void;
+    setZoom(zoom: number): void;
+    getZoom(): number;
+    setCenter(latLng: { lat: number; lng: number }): void;
   }
   class Marker {
     constructor(opts: {
       position: { lat: number; lng: number };
-      map: Map;
+      map: Map | null;
       title?: string;
       icon?: Record<string, unknown>;
+      label?: string | { text: string; color?: string; fontWeight?: string; fontSize?: string };
+      zIndex?: number;
     });
     addListener(event: string, handler: () => void): void;
+    setMap(map: Map | null): void;
   }
   class InfoWindow {
-    setContent(content: string): void;
+    setContent(content: string | Node): void;
     open(map: Map, anchor: Marker): void;
   }
+  class LatLng {
+    constructor(lat: number, lng: number);
+  }
   const SymbolPath: { CIRCLE: number };
+
+  namespace visualization {
+    class HeatmapLayer {
+      constructor(opts: { data: LatLng[]; radius?: number });
+      setMap(map: Map | null): void;
+    }
+  }
 }
 
 interface Window {

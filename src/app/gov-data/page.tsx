@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { SkeletonCard } from "@/components/Skeleton";
 import { useSession } from "@/lib/session";
 import { auth } from "@/lib/firebase";
 import {
@@ -22,6 +23,8 @@ const STATUS_COLOR: Record<string, string> = {
 export default function GovDataPage() {
   const { ready, firebaseUser, isMp } = useSession();
   const [imports, setImports] = useState<GovDataImportOut[]>([]);
+  const [loadingImports, setLoadingImports] = useState(true);
+  const [importsError, setImportsError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resourceId, setResourceId] = useState("");
@@ -41,8 +44,16 @@ export default function GovDataPage() {
   }, [ready, firebaseUser, isMp]);
 
   async function refresh() {
-    const idToken = await auth!.currentUser!.getIdToken();
-    listGovDataImports(idToken).then(setImports).catch(() => {});
+    setLoadingImports(true);
+    setImportsError(null);
+    try {
+      const idToken = await auth!.currentUser!.getIdToken();
+      setImports(await listGovDataImports(idToken));
+    } catch (e) {
+      setImportsError(e instanceof Error ? e.message : "Failed to load import history");
+    } finally {
+      setLoadingImports(false);
+    }
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -133,7 +144,22 @@ export default function GovDataPage() {
 
         <section className="mt-10">
           <p className="eyebrow text-[var(--color-ink-soft)]">Import history</p>
-          {imports.length === 0 ? (
+          {loadingImports ? (
+            <div className="mt-4">
+              <SkeletonCard lines={2} />
+            </div>
+          ) : importsError ? (
+            <div className="card mt-4 flex flex-wrap items-center gap-3 p-6 text-sm text-[var(--color-terracotta)]">
+              <span>{importsError}</span>
+              <button
+                type="button"
+                className="rounded-full border border-[var(--color-terracotta)] px-3 py-1 text-xs font-semibold"
+                onClick={refresh}
+              >
+                Retry
+              </button>
+            </div>
+          ) : imports.length === 0 ? (
             <div className="card mt-4 p-8 text-center text-[var(--color-ink-soft)]">No imports yet.</div>
           ) : (
             <div className="card mt-4 divide-y divide-[var(--color-line)] p-0">
