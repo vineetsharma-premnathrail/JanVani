@@ -4,6 +4,34 @@
 
 ---
 
+## 2026-07-08 — DEPLOYED TO PRODUCTION ✅
+
+Both halves live and verified (22/22 Playwright checks passed against
+https://vipasana-499205.web.app; all new API routes respond on
+https://asia-south1-vipasana-499205.cloudfunctions.net/api).
+
+- **Migrations applied to live Cloud SQL** (`a1b2c3d4e5f7` + `b2c3d4e5f6a8`
+  → head) via **Cloud SQL Auth Proxy** with a `gcloud auth print-access-token`
+  token — no authorized-networks/firewall change was made (the proxy is the
+  clean path past the rotating-dev-IP problem; reuse it for future
+  migrations: `cloud-sql-proxy --token "$(gcloud auth print-access-token)"
+  --port 5433 vipasana-499205:asia-south1:vipasana-499205-instance`, then
+  alembic with DATABASE_URL host swapped to 127.0.0.1:5433).
+- **Backend deployed** (`firebase deploy --only functions`). Incident: the
+  default 256Mi function memory OOM-crash-looped on startup (~260-270Mi);
+  hotfixed live via `gcloud run services update api --memory=512Mi` and
+  pinned in code (`backend/main.py`, `memory=512`).
+- **Frontend deployed** (`firebase deploy --only hosting`).
+- Verification found and fixed two real bugs pre-deploy: the
+  `[data-theme=dark]` token block was stripped by LightningCSS (tokens are
+  now `light-dark()` pairs in `@theme` — the only pattern that survives the
+  build), and ThemeToggle's first click was a no-op from the "system" state.
+- Known cosmetic: `/favicon.ico` 404s in the browser console —
+  `src/app/icon.svg` added (ships with the next hosting deploy).
+- NOT yet done: git push to origin (all work is in local commits only),
+  App Check (still deferred, no reCAPTCHA key), Token Creator grant
+  (deferred — prod media links still null), demo-data cleanup (deferred).
+
 ## 2026-07-08 session — full build-out (committed in 4 commits)
 
 Everything in this block IS committed. Verified: `next build` green
