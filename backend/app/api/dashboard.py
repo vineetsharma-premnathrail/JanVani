@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -15,13 +15,16 @@ from app.models.mp_allowlist import MPAllowlistEntry
 from app.models.status_notification import StatusNotification
 from app.ranking import compute_ranked_issues
 from app.schemas.dashboard import (
+    AlertOut,
     CategoryCount,
+    CompareOut,
     ComplaintStatusUpdate,
     ConsensusClusterOut,
     DashboardSummary,
     DepartmentProgress,
     EvidenceOut,
     MapPoint,
+    PeriodStats,
     ProgressOut,
     RankedIssueOut,
     RecentComplaint,
@@ -56,6 +59,7 @@ def _to_recent(c: Complaint) -> RecentComplaint:
         photo_url=media.signed_url(c.photo_url),
         verification_confidence=c.verification_confidence,
         verification_status=c.verification_status,
+        verification_reasons=c.verification_reasons,
     )
 
 
@@ -227,6 +231,94 @@ def get_progress(mp: MPAllowlistEntry = Depends(get_current_mp), db: Session = D
     return ProgressOut(
         by_status=by_status, by_status_last_30_days=by_status_last_30_days, by_department=by_department
     )
+
+
+def _period_stats(scope, start: datetime, end: datetime, db: Session) -> PeriodStats:
+    window = (Complaint.created_at >= start, Complaint.created_at < end)
+    total = db.execute(select(func.count(Complaint.id)).where(scope, *window)).scalar() or 0
+    resolved = db.execute(
+        select(func.count(Complaint.id)).where(scope, *window, Complaint.status == "resolved")
+    ).scalar() or 0
+    category_rows = db.execute(
+        select(Complaint.category, func.count(Complaint.id))
+        .where(scope, *window, Complaint.category.is_not(None))
+        .group_by(Complaint.category)
+        .order_by(func.count(Complaint.id).desc())
+    ).all()
+    return PeriodStats(
+        from_date=start,
+        to_date=end,
+        total=total,
+        resolved=resolved,
+        by_category=[CategoryCount(category=cat, count=n) for cat, n in category_rows],
+    )
+
+
+@router.get("/compare", response_model=CompareOut)
+def get_compare(
+    days: int = Query(default=30, ge=7, le=180),
+    mp: MPAllowlistEntry = Depends(get_current_mp),
+    db: Session = Depends(get_db),
+):
+    """This period vs the previous period of equal length — plain grouped
+    counts, so the dashboard's compare mode never shows a derived number
+    the MP couldn't recompute from the complaint list itself."""
+    now = datetime.now(timezone.utc)
+    mid = now - timedelta(days=days)
+    earliest = now - timedelta(days=2 * days)
+
+    if not mp.constituency:
+        empty = PeriodStats(from_date=mid, to_date=now, total=0, resolved=0, by_category=[])
+        empty_prev = PeriodStats(from_date=earliest, to_date=mid, total=0, resolved=0, by_category=[])
+        return CompareOut(current=empty, previous=empty_prev)
+
+    scope = Complaint.constituency == mp.constituency
+    return CompareOut(
+        current=_period_stats(scope, mid, now, db),
+        previous=_period_stats(scope, earliest, mid, db),
+    )
+
+
+@router.get("/alerts", response_model=list[AlertOut])
+def get_alerts(
+    since: datetime | None = None,
+    min_confidence: int = Query(default=70, ge=0, le=100),
+    mp: MPAllowlistEntry = Depends(get_current_mp),
+    db: Session = Depends(get_db),
+):
+    """High-confidence complaints since `since` (default: last 24h) — feeds
+    the dashboard notification bell. The threshold compares the stored
+    rule-computed verification_confidence; nothing is rescored here."""
+    if not mp.constituency:
+        return []
+    # Clients send ISO timestamps; naive values are treated as UTC because
+    # every created_at in this schema is timezone-aware UTC.
+    if since is None:
+        since = datetime.now(timezone.utc) - timedelta(hours=24)
+    elif since.tzinfo is None:
+        since = since.replace(tzinfo=timezone.utc)
+
+    rows = db.execute(
+        select(Complaint)
+        .where(
+            Complaint.constituency == mp.constituency,
+            Complaint.created_at > since,
+            Complaint.verification_confidence >= min_confidence,
+        )
+        .order_by(Complaint.created_at.desc())
+        .limit(20)
+    ).scalars().all()
+    return [
+        AlertOut(
+            id=c.id,
+            category=c.category,
+            location=c.location,
+            verification_confidence=c.verification_confidence,
+            verification_status=c.verification_status,
+            created_at=c.created_at,
+        )
+        for c in rows
+    ]
 
 
 @router.get("/consensus", response_model=list[ConsensusClusterOut])

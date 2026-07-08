@@ -29,7 +29,7 @@ type Dict = typeof dictionaries.en;
 
 export const dictionaries = {
   en: {
-    nav: { home: "Home", how: "How it works", impact: "For your MP", submit: "Raise your voice", signIn: "Sign in", profile: "Profile" },
+    nav: { home: "Home", how: "How it works", impact: "For your MP", submit: "Raise your voice", signIn: "Sign in", profile: "Profile", myComplaints: "My complaints", guide: "Guide", about: "About" },
     hero: {
       badge: "Citizen voice, measured and mapped",
       titleA: "Your street knows",
@@ -209,7 +209,7 @@ export const dictionaries = {
     lang: "Language",
   },
   hi: {
-    nav: { home: "होम", how: "यह कैसे काम करता है", impact: "आपके सांसद के लिए", submit: "अपनी आवाज़ उठाएँ", signIn: "साइन इन", profile: "प्रोफ़ाइल" },
+    nav: { home: "होम", how: "यह कैसे काम करता है", impact: "आपके सांसद के लिए", submit: "अपनी आवाज़ उठाएँ", signIn: "साइन इन", profile: "प्रोफ़ाइल", myComplaints: "मेरी शिकायतें", guide: "गाइड", about: "हमारे बारे में" },
     hero: {
       badge: "नागरिकों की आवाज़, मापी और मानचित्रित",
       titleA: "आपकी गली जानती है",
@@ -422,4 +422,21 @@ export function useI18n(): I18nValue {
   const ctx = useContext(I18nContext);
   if (!ctx) throw new Error("useI18n must be used within <I18nProvider>");
   return ctx;
+}
+
+/* ------------------------------------------------------------------
+   Page-scoped copy. New pages keep their strings in a local
+   `strings.ts` ({ en: {...}, hi: {...} }) instead of growing the shared
+   dictionaries above — this hook picks the right one for the current
+   locale. `hi` may be partial: missing sections fall back to English
+   per top-level key (same graceful-fallback stance as dictFor above).
+   Locales without a translation (ta/mr/bn) read English.
+   ------------------------------------------------------------------ */
+export function useLocalStrings<T extends Record<string, unknown>>(strings: {
+  en: T;
+  hi?: Partial<T>;
+}): T {
+  const { locale } = useI18n();
+  if (locale !== "hi" || !strings.hi) return strings.en;
+  return { ...strings.en, ...strings.hi };
 }

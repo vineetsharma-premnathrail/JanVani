@@ -112,6 +112,7 @@ export interface RecentComplaint {
   photo_url?: string | null;
   verification_confidence?: number | null;
   verification_status?: string | null;
+  verification_reasons?: string[] | null;
 }
 
 export interface MapPoint {
@@ -326,6 +327,161 @@ export async function importGovDataFromApi(
 
 export async function listGovDataImports(idToken: string): Promise<GovDataImportOut[]> {
   const res = await fetch(`${API_URL}/gov-data/imports`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+/* ---------------- Citizen: my complaints, nearby, suggestions, stats ---------------- */
+
+export interface StatusHistoryEntry {
+  old_status: string;
+  new_status: string;
+  changed_at: string;
+}
+
+export interface MyComplaintOut {
+  id: string;
+  text: string;
+  category: string | null;
+  location: string | null;
+  anonymous: boolean;
+  status: string;
+  assigned_department: string | null;
+  created_at: string;
+  audio_url: string | null;
+  photo_url: string | null;
+  verification_confidence: number | null;
+  verification_status: string | null;
+  verification_reasons: string[] | null;
+  status_history: StatusHistoryEntry[];
+}
+
+export async function getMyComplaints(
+  idToken: string,
+  opts?: { limit?: number; offset?: number }
+): Promise<MyComplaintOut[]> {
+  const params = new URLSearchParams();
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.offset) params.set("offset", String(opts.offset));
+  const qs = params.toString();
+  const res = await fetch(`${API_URL}/complaints/mine${qs ? `?${qs}` : ""}`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+export interface NearbyComplaintOut {
+  category: string | null;
+  status: string;
+  lat: number;
+  lng: number;
+  created_at: string;
+}
+
+export async function getNearbyComplaints(
+  idToken: string,
+  lat: number,
+  lng: number,
+  opts?: { radiusKm?: number; limit?: number }
+): Promise<NearbyComplaintOut[]> {
+  const params = new URLSearchParams();
+  params.set("lat", String(lat));
+  params.set("lng", String(lng));
+  if (opts?.radiusKm) params.set("radius_km", String(opts.radiusKm));
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  const res = await fetch(`${API_URL}/complaints/nearby?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+export interface CategorySuggestion {
+  category: string;
+  matched_keywords: string[];
+}
+
+export interface SuggestCategoryOut {
+  suggestions: CategorySuggestion[];
+  source: string;
+}
+
+export async function suggestCategory(idToken: string, text: string): Promise<SuggestCategoryOut> {
+  const res = await fetch(`${API_URL}/complaints/suggest-category`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+export interface MyStatsOut {
+  complaints_total: number;
+  resolved_count: number;
+  in_progress_count: number;
+  first_complaint_at: string | null;
+  civic_points: number;
+  badge: string;
+  next_badge: string | null;
+  points_to_next: number | null;
+}
+
+export async function getMyStats(idToken: string): Promise<MyStatsOut> {
+  const res = await fetch(`${API_URL}/users/me/stats`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+/* ---------------- MP dashboard: compare mode + alerts ---------------- */
+
+export interface PeriodStats {
+  from_date: string;
+  to_date: string;
+  total: number;
+  resolved: number;
+  by_category: CategoryCount[];
+}
+
+export interface CompareOut {
+  current: PeriodStats;
+  previous: PeriodStats;
+}
+
+export async function getDashboardCompare(idToken: string, days = 30): Promise<CompareOut> {
+  const res = await fetch(`${API_URL}/dashboard/compare?days=${days}`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  return res.json();
+}
+
+export interface AlertOut {
+  id: string;
+  category: string | null;
+  location: string | null;
+  verification_confidence: number | null;
+  verification_status: string | null;
+  created_at: string;
+}
+
+export async function getDashboardAlerts(
+  idToken: string,
+  opts?: { since?: string; minConfidence?: number }
+): Promise<AlertOut[]> {
+  const params = new URLSearchParams();
+  if (opts?.since) params.set("since", opts.since);
+  if (opts?.minConfidence != null) params.set("min_confidence", String(opts.minConfidence));
+  const qs = params.toString();
+  const res = await fetch(`${API_URL}/dashboard/alerts${qs ? `?${qs}` : ""}`, {
     headers: { Authorization: `Bearer ${idToken}` },
   });
   if (!res.ok) throw new Error(`Server responded ${res.status}`);

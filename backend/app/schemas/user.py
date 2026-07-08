@@ -69,3 +69,17 @@ class NotificationOut(BaseModel):
     old_status: str
     new_status: str
     created_at: datetime
+
+
+class MyStatsOut(BaseModel):
+    """Civic standing for the signed-in citizen. Numbers come from real
+    complaint counts + the fixed rules in app/civic.py — never from AI."""
+
+    complaints_total: int
+    resolved_count: int
+    in_progress_count: int
+    first_complaint_at: datetime | None
+    civic_points: int
+    badge: str
+    next_badge: str | None
+    points_to_next: int | None

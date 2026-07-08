@@ -6,6 +6,7 @@ import { Logo } from "./Logo";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useI18n } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
+import { ThemeToggle } from "@/lib/theme";
 
 export function Header() {
   const { t } = useI18n();
@@ -15,11 +16,13 @@ export function Header() {
   const links = [
     { href: "/", label: t.nav.home },
     { href: "/#how", label: t.nav.how },
-    { href: "/#for-mp", label: t.nav.impact },
+    { href: "/guide", label: t.nav.guide },
+    { href: "/about", label: t.nav.about },
+    ...(firebaseUser ? [{ href: "/my-complaints", label: t.nav.myComplaints }] : []),
   ];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--color-line)] bg-[rgba(246,241,231,0.82)] backdrop-blur-md">
+    <header className="header-glass no-print sticky top-0 z-40 border-b border-[var(--color-line)] backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5">
         <Link href="/" aria-label="JanVaani home">
           <Logo />
@@ -39,6 +42,7 @@ export function Header() {
 
         <div className="flex items-center gap-2">
           <LanguageSwitcher />
+          <ThemeToggle />
           {firebaseUser ? (
             <Link
               href="/profile"

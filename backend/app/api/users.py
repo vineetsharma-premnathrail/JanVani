@@ -1,15 +1,16 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.civic import compute_civic_standing
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.complaint import Complaint
 from app.models.status_notification import StatusNotification
 from app.models.user import User
-from app.schemas.user import NotificationOut, ProfileUpdate, UserOut
+from app.schemas.user import MyStatsOut, NotificationOut, ProfileUpdate, UserOut
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -78,3 +79,37 @@ def get_my_notifications(
     db.commit()
 
     return out
+
+
+@router.get("/me/stats", response_model=MyStatsOut)
+def get_my_stats(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Civic standing = real counts + the fixed rules in app/civic.py.
+    One grouped query; no AI anywhere in this number."""
+    rows = db.execute(
+        select(Complaint.status, func.count(Complaint.id))
+        .where(Complaint.user_id == user.id)
+        .group_by(Complaint.status)
+    ).all()
+    by_status = {status: count for status, count in rows}
+    total = sum(by_status.values())
+    resolved = by_status.get("resolved", 0)
+    in_progress = by_status.get("in_progress", 0)
+
+    first_at = db.execute(
+        select(func.min(Complaint.created_at)).where(Complaint.user_id == user.id)
+    ).scalar()
+
+    standing = compute_civic_standing(total, resolved)
+    return MyStatsOut(
+        complaints_total=total,
+        resolved_count=resolved,
+        in_progress_count=in_progress,
+        first_complaint_at=first_at,
+        civic_points=standing.civic_points,
+        badge=standing.badge,
+        next_badge=standing.next_badge,
+        points_to_next=standing.points_to_next,
+    )

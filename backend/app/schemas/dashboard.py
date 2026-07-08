@@ -24,6 +24,7 @@ class RecentComplaint(BaseModel):
     photo_url: str | None
     verification_confidence: int | None
     verification_status: str | None
+    verification_reasons: list[str] | None
 
 
 class MapPoint(BaseModel):
@@ -88,3 +89,27 @@ class ProgressOut(BaseModel):
     by_status: list[StatusCount]
     by_status_last_30_days: list[StatusCount]
     by_department: list[DepartmentProgress]
+
+
+class PeriodStats(BaseModel):
+    from_date: datetime
+    to_date: datetime
+    total: int
+    # Complaints CREATED in the window that are currently resolved — there
+    # is no resolved_at column, so "resolved in this window" isn't knowable.
+    resolved: int
+    by_category: list[CategoryCount]
+
+
+class CompareOut(BaseModel):
+    current: PeriodStats
+    previous: PeriodStats
+
+
+class AlertOut(BaseModel):
+    id: uuid.UUID
+    category: str | None
+    location: str | None
+    verification_confidence: int | None
+    verification_status: str | None
+    created_at: datetime
