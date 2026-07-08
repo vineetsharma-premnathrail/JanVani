@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { auth } from "@/lib/firebase";
 import { INDIAN_STATES } from "@/lib/constants";
-import { getMyNotifications, type NotificationOut, type ProfileUpdateInput } from "@/services/api";
+import { getMyNotifications, getMyStats, type MyStatsOut, type NotificationOut, type ProfileUpdateInput } from "@/services/api";
 
 const NOTIFICATION_STATUS_LABEL: Record<string, string> = {
   new: "New",
@@ -36,6 +36,7 @@ export default function ProfilePage() {
   const [welcome, setWelcome] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notifications, setNotifications] = useState<NotificationOut[]>([]);
+  const [stats, setStats] = useState<MyStatsOut | null>(null);
 
   useEffect(() => {
     setWelcome(new URLSearchParams(window.location.search).get("welcome") === "1");
@@ -54,6 +55,11 @@ export default function ProfilePage() {
       .then((idToken) => getMyNotifications(idToken))
       .then(setNotifications)
       .catch((e) => console.error("Failed to load notifications", e));
+    auth!.currentUser!
+      .getIdToken()
+      .then((idToken) => getMyStats(idToken))
+      .then(setStats)
+      .catch((e) => console.error("Failed to load civic stats", e));
   }, [ready, firebaseUser, isOnboarded]);
 
   useEffect(() => {
@@ -143,6 +149,8 @@ export default function ProfilePage() {
             {(profile.first_name?.[0] ?? "?").toUpperCase()}
           </div>
         </div>
+
+        {stats && <CivicCard stats={stats} />}
 
         <div className="card mt-8 p-6 sm:p-8">
           {!editing ? (
@@ -289,6 +297,54 @@ export default function ProfilePage() {
       </main>
       <Footer />
     </>
+  );
+}
+
+/* Civic standing — numbers come straight from GET /users/me/stats, which
+   applies the fixed rules in backend/app/civic.py. Nothing is computed
+   here beyond the progress-bar width. */
+function CivicCard({ stats }: { stats: MyStatsOut }) {
+  const target = stats.points_to_next != null ? stats.civic_points + stats.points_to_next : stats.civic_points;
+  const pct = target > 0 ? Math.min(100, Math.round((stats.civic_points / target) * 100)) : 100;
+  return (
+    <div className="card mt-8 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="eyebrow text-[var(--color-marigold-deep)]">Civic standing</p>
+          <p className="font-display mt-1 text-2xl font-semibold text-[var(--color-ink)]">
+            {stats.badge}
+            <span className="ml-2 text-base font-medium text-[var(--color-ink-soft)]">{stats.civic_points} pts</span>
+          </p>
+        </div>
+        <div className="flex gap-5 text-center text-sm">
+          <div>
+            <p className="font-display text-xl font-semibold text-[var(--color-ink)]">{stats.complaints_total}</p>
+            <p className="text-xs text-[var(--color-ink-soft)]">raised</p>
+          </div>
+          <div>
+            <p className="font-display text-xl font-semibold text-[var(--color-sage)]">{stats.resolved_count}</p>
+            <p className="text-xs text-[var(--color-ink-soft)]">resolved</p>
+          </div>
+          <div>
+            <p className="font-display text-xl font-semibold text-[var(--color-marigold-deep)]">{stats.in_progress_count}</p>
+            <p className="text-xs text-[var(--color-ink-soft)]">in progress</p>
+          </div>
+        </div>
+      </div>
+      {stats.next_badge && stats.points_to_next != null && (
+        <div className="mt-4">
+          <div className="h-2 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--color-ink)_10%,transparent)]">
+            <div className="h-full rounded-full bg-[var(--color-marigold)]" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="mt-1.5 text-xs text-[var(--color-ink-soft)]">
+            {stats.points_to_next} pts to <strong>{stats.next_badge}</strong>
+          </p>
+        </div>
+      )}
+      <Link href="/my-complaints" className="mt-4 inline-block text-sm font-bold text-[var(--color-indigo)] hover:underline">
+        View my complaints →
+      </Link>
+    </div>
   );
 }
 

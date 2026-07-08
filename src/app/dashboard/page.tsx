@@ -5,7 +5,10 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { HotspotMap } from "@/components/HotspotMap";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Skeleton, SkeletonCard } from "@/components/Skeleton";
+import { Modal } from "@/components/ui/Modal";
+import { ThemeToggle } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { auth } from "@/lib/firebase";
@@ -13,12 +16,14 @@ import {
   getDashboardSummary,
   getDashboardEvidence,
   getDashboardConsensus,
+  getDashboardCompare,
   getRankedIssues,
   getDashboardProgress,
   listComplaints,
   updateComplaint,
   COMPLAINT_STATUSES,
   DEPARTMENTS,
+  type CompareOut,
   type DashboardSummary,
   type EvidenceOut,
   type ConsensusCluster,
@@ -76,6 +81,21 @@ export default function DashboardPage() {
   const [exploreCategory, setExploreCategory] = useState<string | null>(null);
   const [exploreComplaints, setExploreComplaints] = useState<RecentComplaint[]>([]);
   const [exploreLoading, setExploreLoading] = useState(false);
+  const [compare, setCompare] = useState<CompareOut | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
+
+  async function toggleCompare() {
+    const next = !compareOpen;
+    setCompareOpen(next);
+    if (next && !compare && auth?.currentUser) {
+      try {
+        const idToken = await auth.currentUser.getIdToken();
+        setCompare(await getDashboardCompare(idToken, 30));
+      } catch (e) {
+        console.error("Failed to load compare data", e);
+      }
+    }
+  }
 
   async function loadDashboard() {
     setError(null);
@@ -190,13 +210,15 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-dvh">
-      <header className="sticky top-0 z-40 border-b border-[var(--color-line)] bg-[rgba(246,241,231,0.82)] backdrop-blur-md">
+      <header className="header-glass no-print sticky top-0 z-40 border-b border-[var(--color-line)] backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5">
           <Link href="/" aria-label="JanVaani home">
             <Logo size={30} />
           </Link>
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
+            <ThemeToggle />
+            <NotificationBell />
             <div className="relative">
               <button
                 className="btn btn-ghost !p-2.5 !min-h-0"
@@ -229,8 +251,27 @@ export default function DashboardPage() {
       </header>
 
       <main id="main" className="mx-auto max-w-4xl px-5 py-12">
-        <p className="eyebrow text-[var(--color-terracotta)]">{t.dash.badge}</p>
-        <h1 className="display-lg mt-2">{CONSTITUENCY_LABEL}</h1>
+        <div className="print-only mb-4">
+          <p className="text-sm font-bold">JanVaani — Constituency field report</p>
+          <p className="text-xs">Generated {new Date().toLocaleString()}</p>
+        </div>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="eyebrow text-[var(--color-terracotta)]">{t.dash.badge}</p>
+            <h1 className="display-lg mt-2">{CONSTITUENCY_LABEL}</h1>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="btn btn-ghost no-print !py-2.5 !px-4 text-sm"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M7 8V4h10v4M7 17h10v4H7v-4Zm-3-9h16a1 1 0 0 1 1 1v7h-4M3 16h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M3 9v7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            Print report
+          </button>
+        </div>
 
         {error && (
           <div
@@ -267,6 +308,18 @@ export default function DashboardPage() {
               <Kpi label={t.dash.kpiThemes} value={fmt(summary.by_category.length)} />
               <Kpi label={t.dash.kpiAreas} value={fmt(summary.distinct_locations)} />
             </div>
+
+            <div className="no-print mt-4">
+              <button
+                type="button"
+                onClick={toggleCompare}
+                aria-expanded={compareOpen}
+                className={`chip text-sm ${compareOpen ? "chip-active" : ""}`}
+              >
+                {compareOpen ? "Hide comparison" : "Compare: last 30 days vs previous 30"}
+              </button>
+            </div>
+            {compareOpen && compare && <CompareSection data={compare} />}
 
             {evidence && (
               <section className="mt-10">
@@ -467,6 +520,79 @@ function Kpi({ label, value }: { label: string; value: string }) {
   );
 }
 
+/* Period-over-period comparison. Deltas are plain subtractions of the two
+   grouped counts the backend returned — nothing is modeled or projected. */
+function CompareSection({ data }: { data: CompareOut }) {
+  const { current, previous } = data;
+  const fmtRange = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+
+  const prevByCat = new Map(previous.by_category.map((c) => [c.category, c.count]));
+  const rows = current.by_category.map((c) => ({
+    category: c.category,
+    now: c.count,
+    before: prevByCat.get(c.category) ?? 0,
+  }));
+  for (const p of previous.by_category) {
+    if (!rows.some((row) => row.category === p.category)) {
+      rows.push({ category: p.category, now: 0, before: p.count });
+    }
+  }
+  rows.sort((a, b) => b.now - a.now);
+
+  const delta = (now: number, before: number) => {
+    const d = now - before;
+    if (d === 0) return <span className="text-[var(--color-ink-soft)]">→ 0</span>;
+    return d > 0 ? (
+      <span className="font-bold text-[var(--color-terracotta)]">↑ {d}</span>
+    ) : (
+      <span className="font-bold text-[var(--color-sage)]">↓ {Math.abs(d)}</span>
+    );
+  };
+
+  return (
+    <section className="card mt-4 p-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-bold text-[var(--color-ink)]">
+          {fmtRange(current.from_date)} – {fmtRange(current.to_date)}
+          <span className="mx-2 text-[var(--color-ink-soft)]">vs</span>
+          {fmtRange(previous.from_date)} – {fmtRange(previous.to_date)}
+        </p>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div>
+          <p className="text-2xl font-bold">{current.total}</p>
+          <p className="text-xs text-[var(--color-ink-soft)]">complaints · {delta(current.total, previous.total)}</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{current.resolved}</p>
+          <p className="text-xs text-[var(--color-ink-soft)]">resolved · {delta(current.resolved, previous.resolved)}</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{previous.total}</p>
+          <p className="text-xs text-[var(--color-ink-soft)]">previous period</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{previous.resolved}</p>
+          <p className="text-xs text-[var(--color-ink-soft)]">previous resolved</p>
+        </div>
+      </div>
+      {rows.length > 0 && (
+        <ul className="mt-5 space-y-2 border-t border-[var(--color-line)] pt-4">
+          {rows.slice(0, 6).map((row) => (
+            <li key={row.category} className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-semibold text-[var(--color-ink)]">{row.category}</span>
+              <span className="text-[var(--color-ink-soft)]">
+                {row.before} → {row.now} · {delta(row.now, row.before)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function ComplaintRow({
   complaint: r,
   busy,
@@ -476,6 +602,7 @@ function ComplaintRow({
   busy: boolean;
   onUpdate: (update: { status?: ComplaintStatus; assigned_department?: Department }) => void;
 }) {
+  const [whyOpen, setWhyOpen] = useState(false);
   return (
     <div className="p-5">
       <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-ink-soft)]">
@@ -484,15 +611,40 @@ function ComplaintRow({
         )}
         {r.location && <span>{r.location}</span>}
         {r.verification_status && (
-          <span
-            className="rounded-full px-2.5 py-1 font-semibold text-white"
+          <button
+            type="button"
+            onClick={() => setWhyOpen(true)}
+            title="Why this score?"
+            className="rounded-full px-2.5 py-1 font-semibold text-white underline-offset-2 hover:underline"
             style={{ background: VERIFICATION_COLOR[r.verification_status] || "var(--color-ink)" }}
           >
-            {r.verification_status} evidence · {r.verification_confidence}%
-          </span>
+            {r.verification_status} evidence · {r.verification_confidence}% ?
+          </button>
         )}
         <span className="ml-auto">{new Date(r.created_at).toLocaleDateString()}</span>
       </div>
+
+      <Modal open={whyOpen} onClose={() => setWhyOpen(false)} title="Why this score?">
+        <p className="text-sm text-[var(--color-ink-soft)]">
+          Computed at submission time by fixed rules (verification.py) — the exact points awarded:
+        </p>
+        {r.verification_reasons && r.verification_reasons.length > 0 ? (
+          <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-[var(--color-ink)]">
+            {r.verification_reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--color-ink)]">
+            No stored breakdown for this complaint (submitted before reason tracking, or not yet scored).
+          </p>
+        )}
+        {r.verification_confidence != null && (
+          <p className="mt-4 text-sm font-bold text-[var(--color-ink)]">
+            Total: {r.verification_confidence}/100 → {r.verification_status}
+          </p>
+        )}
+      </Modal>
 
       {r.text && <p className="mt-2 text-[1.05rem]">{r.text}</p>}
       {r.anonymous && <p className="mt-1 text-xs text-[var(--color-ink-soft)]">Anonymous</p>}

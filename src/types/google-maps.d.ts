@@ -3,7 +3,16 @@
 // pulling in @types/google.maps just for a handful of calls.
 declare namespace google.maps {
   class Map {
-    constructor(el: HTMLElement, opts: { center: { lat: number; lng: number }; zoom: number });
+    constructor(
+      el: HTMLElement,
+      opts: {
+        center: { lat: number; lng: number };
+        zoom: number;
+        disableDefaultUI?: boolean;
+        zoomControl?: boolean;
+        gestureHandling?: string;
+      }
+    );
     addListener(event: string, handler: () => void): void;
     setZoom(zoom: number): void;
     getZoom(): number;
