@@ -49,7 +49,10 @@ def _get_wsgi_app():
     return _wsgi_app
 
 
-@https_fn.on_request(secrets=_ADMIN_SECRETS)
+# memory: the default 256Mi OOM-crash-looped in production on 2026-07-08
+# (FastAPI + firebase_admin + SQLAlchemy sit at ~260-270Mi at startup).
+# Keep this in code so a redeploy never silently resets the limit.
+@https_fn.on_request(secrets=_ADMIN_SECRETS, memory=512)
 def api(req: https_fn.Request) -> https_fn.Response:
     try:
         return Response.from_app(_get_wsgi_app(), req.environ)
